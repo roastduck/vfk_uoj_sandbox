@@ -211,7 +211,7 @@ void set_limit(int r, int val)  {
 	}
 }
 void run_child() {
-	set_limit(RLIMIT_CPU, (int) ceil(run_program_config.time_limit / 1000));
+	set_limit(RLIMIT_CPU, (int) ceil(run_program_config.time_limit / 1000.0));
 	set_limit(RLIMIT_FSIZE, run_program_config.output_limit << 10);
 	set_limit(RLIMIT_STACK, run_program_config.stack_limit << 10);
 
@@ -333,7 +333,7 @@ RunResult trace_children() {
 		return RunResult(RS_JGF);
 	} else if (rp_timer_pid == 0) {
 		struct timespec ts;
-		ts.tv_sec = (int) ceil(run_program_config.time_limit/1000) + 2;
+		ts.tv_sec = (int) ceil(run_program_config.time_limit/1000.0) + 2;
 		ts.tv_nsec = 0;
 		nanosleep(&ts, NULL);
 		exit(0);
