@@ -364,12 +364,17 @@ RunResult trace_children() {
 			continue;
 		}
 
-		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000;
+		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
+		              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000;
 		int usermem = ruse.ru_maxrss;
 		if (pid == rp_children[0].pid) {
 			if (usermem > run_program_config.memory_limit) {
 				stop_all();
 				return RunResult(RS_MLE);
+			}
+			if (usertim > run_program_config.time_limit) {
+				stop_all();
+				return RunResult(RS_TLE);
 			}
 		}
 
