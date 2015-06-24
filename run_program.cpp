@@ -55,6 +55,7 @@ struct RunProgramConfig
 	bool allow_proc;
 	bool safe_mode;
 	bool need_show_trace_details;
+	bool userss;
 
 	string program_name;
 	string program_basename;
@@ -80,6 +81,7 @@ argp_option run_program_argp_options[] =
 	{"allow-proc"         , 503, 0             , 0, "Allow fork, exec... etc."                              , 13},
 	{"add-readable-raw"   , 504, "FOLDER"      , 0, "Add a readable (don't transform to its real path)"     , 14},
 	{"add-writable"       , 505, "FILE"        , 0, "Add a writable file"                                   , 15},
+	{"use-rss"            , 506, 0             , 0, "Use RSS as the memory value (use AS as default)"       , 16},
 	{0}
 };
 error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state)
@@ -136,6 +138,9 @@ error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state
 		case 505:
 			config->extra_writable_files.push_back(realpath(arg));
 			break;
+		case 506:
+			config->userss = true;
+			break;
 		case ARGP_KEY_ARG:
 			config->argv.push_back(arg);
 			for (int i = state->next; i < state->argc; i++) {
@@ -178,6 +183,7 @@ void parse_args(int argc, char **argv) {
 	run_program_config.safe_mode = true;
 	run_program_config.need_show_trace_details = false;
 	run_program_config.allow_proc = false;
+	run_program_config.userss = false;
 
 	argp_parse(&run_program_argp, argc, argv, ARGP_NO_ARGS | ARGP_IN_ORDER, 0, &run_program_config);
 
@@ -346,6 +352,7 @@ RunResult trace_children() {
 	bool has_started = false;
 
 	pid_t prev_pid = -1;
+	int useras = 0;
 	while (true) {
 		int stat = 0;
 		struct rusage ruse;
@@ -366,8 +373,28 @@ RunResult trace_children() {
 
 		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
 		              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000;
-		int usermem = ruse.ru_maxrss;
+		int usermem, userrss = ruse.ru_maxrss;
+
 		if (pid == rp_children[0].pid) {
+			if (!run_program_config.userss)
+			{
+				char statm_path[255];
+				sprintf(statm_path, "/proc/%d/statm", pid);
+				FILE *statm = fopen(statm_path, "r");
+				if (statm)
+				{
+					int size, resident, shared, trs, lrs, drs, dt;;
+					if (fscanf(statm, "%d%d%d%d%d%d%d", &size, &resident, &shared, &trs, &lrs, &drs, &dt) != 7)
+					{
+						cerr << "reading statm failed" << endl;
+						stop_all();
+						return RunResult(RS_JGF);
+					}
+					fclose(statm);
+					useras = max(useras, size*4);
+				}
+			}
+			usermem = run_program_config.userss? userrss: useras;
 			if (usermem > run_program_config.memory_limit) {
 				stop_all();
 				return RunResult(RS_MLE);
