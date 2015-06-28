@@ -391,7 +391,7 @@ RunResult trace_children() {
 						return RunResult(RS_JGF);
 					}
 					fclose(statm);
-					useras = max(useras, size*4);
+					useras = max(useras, drs*4);
 				}
 			}
 			usermem = run_program_config.userss? userrss: useras;
