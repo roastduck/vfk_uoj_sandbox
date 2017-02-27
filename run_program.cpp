@@ -217,7 +217,7 @@ void set_limit(int r, int val)  {
 	}
 }
 void run_child() {
-	set_limit(RLIMIT_CPU, (int) ceil(run_program_config.time_limit / 1000.0));
+	set_limit(RLIMIT_CPU, (int) ceil(20 * run_program_config.time_limit / 1000.0)); // This limits wall time, it will be extreamly slow on the cloud
 	set_limit(RLIMIT_FSIZE, run_program_config.output_limit << 10);
 	set_limit(RLIMIT_STACK, run_program_config.stack_limit << 10);
 
@@ -371,8 +371,9 @@ RunResult trace_children() {
 			continue;
 		}
 
-		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
-		              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000;
+		// int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
+		//              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000; // This is wall tile
+		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000; // This is user time
 		int usermem, userrss = ruse.ru_maxrss;
 
 		if (pid == rp_children[0].pid) {
@@ -399,7 +400,7 @@ RunResult trace_children() {
 				stop_all();
 				return RunResult(RS_MLE);
 			}
-			if (usertim > run_program_config.time_limit) {
+			if (usertim > run_program_config.time_limit) { // this will only triggered when there is a syscall
 				stop_all();
 				return RunResult(RS_TLE);
 			}
