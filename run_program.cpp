@@ -339,7 +339,7 @@ RunResult trace_children() {
 		return RunResult(RS_JGF);
 	} else if (rp_timer_pid == 0) {
 		struct timespec ts;
-		ts.tv_sec = (int) ceil(run_program_config.time_limit/1000.0) + 2;
+		ts.tv_sec = (int) ceil(20 * run_program_config.time_limit / 1000.0) + 2; // See rlimit set by set_limit
 		ts.tv_nsec = 0;
 		nanosleep(&ts, NULL);
 		exit(0);
