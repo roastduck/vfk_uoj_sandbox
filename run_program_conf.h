@@ -553,8 +553,6 @@ void init_conf(const RunProgramConfig &config) {
 		readable_file_name_set.insert("/lib64/");
 		readable_file_name_set.insert("/bin/");
 		readable_file_name_set.insert("/sbin/");
-		// readable_file_name_set.insert("/proc/meminfo");
-		// readable_file_name_set.insert("/proc/self/");
 
 		readable_file_name_set.insert("/sys/devices/system/cpu/");
 		readable_file_name_set.insert("/proc/");
