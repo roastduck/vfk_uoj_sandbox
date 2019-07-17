@@ -54,7 +54,6 @@ struct RunProgramConfig
 	string program_name;
 	string program_basename;
 	vector<string> argv;
-
 };
 
 int put_result(string result_file_name, RunResult res) {
