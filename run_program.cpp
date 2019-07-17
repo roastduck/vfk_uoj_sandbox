@@ -31,27 +31,21 @@ struct RunResult {
 	}
 };
 
-int put_result(RunResult res) {
-	printf("%d %d %d %d\n", res.result, res.ust, res.usm, res.exit_code);
-	if (res.result == RS_JGF) {
-		return 1;
-	} else {
-		return 0;
-	}
-}
-
 struct RunProgramConfig
 {
 	int time_limit;
+	int real_time_limit;
 	int memory_limit;
 	int output_limit;
 	int stack_limit;
 	string input_file_name;
 	string output_file_name;
 	string error_file_name;
+	string result_file_name;
 	string work_path;
 	string type;
-	vector<string> extra_readable_files, extra_writable_files;
+	vector<string> extra_readable_files;
+	vector<string> extra_writable_files;
 	bool allow_proc;
 	bool safe_mode;
 	bool need_show_trace_details;
@@ -62,26 +56,51 @@ struct RunProgramConfig
 	vector<string> argv;
 };
 
+int put_result(string result_file_name, RunResult res) {
+	FILE *f;
+	if (result_file_name == "stdout") {
+		f = stdout;
+	} else if (result_file_name == "stderr") {
+		f = stderr;
+	} else {
+		f = fopen(result_file_name.c_str(), "w");
+	}
+	fprintf(f, "%d %d %d %d\n", res.result, res.ust, res.usm, res.exit_code);
+	if (f != stdout && f != stderr) {
+		fclose(f);
+	}
+	if (res.result == RS_JGF) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+char self_path[PATH_MAX + 1] = {};
+
 #include "run_program_conf.h"
 
 argp_option run_program_argp_options[] =
 {
-	{"tl"                 , 'T', "TIME_LIMIT"  , 0, "Set time limit (in ms)"	                             ,  1},
-	{"ml"                 , 'M', "MEMORY_LIMIT", 0, "Set memory limit (in kb)"                              ,  2},
-	{"ol"                 , 'O', "OUTPUT_LIMIT", 0, "Set output limit (in kb)"                              ,  3},
-	{"sl"                 , 'S', "STACK_LIMIT" , 0, "Set stack limit (in kb)"                               ,  4},
-	{"in"                 , 'i', "IN"          , 0, "Set input file name"                                   ,  5},
-	{"out"                , 'o', "OUT"         , 0, "Set output file name"                                  ,  6},
-	{"err"                , 'e', "ERR"         , 0, "Set error file name"                                   ,  7},
-	{"work-path"          , 'w', "WORK_PATH"   , 0, "Set the work path of the program"                      ,  8},
-	{"type"               , 't', "TYPE"        , 0, "Set the program type (for some program such as python)",  9},
-	{"add-readable"       , 500, "FILE"        , 0, "Add a readable file"                                   , 10},
-	{"unsafe"             , 501, 0             , 0, "Don't check dangerous syscalls"                        , 11},
-	{"show-trace-details" , 502, 0             , 0, "Show trace details"                                    , 12},
-	{"allow-proc"         , 503, 0             , 0, "Allow fork, exec... etc."                              , 13},
-	{"add-readable-raw"   , 504, "FOLDER"      , 0, "Add a readable (don't transform to its real path)"     , 14},
-	{"add-writable"       , 505, "FILE"        , 0, "Add a writable file"                                   , 15},
-	{"use-rss"            , 506, 0             , 0, "Use RSS as the memory value (use AS as default)"       , 16},
+	{"tl"                 , 'T', "TIME_LIMIT"  , 0, "Set time limit (in ms)"                            ,  1},
+	{"rtl"                , 'R', "TIME_LIMIT"  , 0, "Set real time limit (in ms)"                       ,  2},
+	{"ml"                 , 'M', "MEMORY_LIMIT", 0, "Set memory limit (in kb)"                              ,  3},
+	{"ol"                 , 'O', "OUTPUT_LIMIT", 0, "Set output limit (in kb)"                              ,  4},
+	{"sl"                 , 'S', "STACK_LIMIT" , 0, "Set stack limit (in kb)"                               ,  5},
+	{"in"                 , 'i', "IN"          , 0, "Set input file name"                                   ,  6},
+	{"out"                , 'o', "OUT"         , 0, "Set output file name"                                  ,  7},
+	{"err"                , 'e', "ERR"         , 0, "Set error file name"                                   ,  8},
+	{"work-path"          , 'w', "WORK_PATH"   , 0, "Set the work path of the program"                      ,  9},
+	{"type"               , 't', "TYPE"        , 0, "Set the program type (for some program such as python)", 10},
+	{"res"                , 'r', "RESULT_FILE" , 0, "Set the file name for outputing the result            ", 10},
+	{"add-readable"       , 500, "FILE"        , 0, "Add a readable file"                                   , 11},
+	{"add-writable"       , 505, "FILE"        , 0, "Add a writable file"                                   , 11},
+	{"unsafe"             , 501, 0             , 0, "Don't check dangerous syscalls"                        , 12},
+	{"show-trace-details" , 502, 0             , 0, "Show trace details"                                    , 13},
+	{"allow-proc"         , 503, 0             , 0, "Allow fork, exec... etc."                              , 14},
+	{"add-readable-raw"   , 504, "FILE"        , 0, "Add a readable (don't transform to its real path)"     , 15},
+	{"add-writable-raw"   , 506, "FILE"        , 0, "Add a writable (don't transform to its real path)"     , 15},
+	{"use-rss"            , 507, 0             , 0, "Use RSS as the memory value (use AS as default)"       , 16},
 	{0}
 };
 error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state)
@@ -92,6 +111,9 @@ error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state
 	{
 		case 'T':
 			config->time_limit = atoi(arg);
+			break;
+		case 'R':
+			config->real_time_limit = atoi(arg);
 			break;
 		case 'M':
 			config->memory_limit = atoi(arg);
@@ -117,6 +139,9 @@ error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state
 				argp_usage(state);
 			}
 			break;
+		case 'r':
+			config->result_file_name = arg;
+			break;
 		case 't':
 			config->type = arg;
 			break;
@@ -139,8 +164,10 @@ error_t run_program_argp_parse_opt (int key, char *arg, struct argp_state *state
 			config->extra_writable_files.push_back(realpath(arg));
 			break;
 		case 506:
-			config->userss = true;
+			config->extra_writable_files.push_back(arg);
 			break;
+		case 507:
+			config->userss = true;
 		case ARGP_KEY_ARG:
 			config->argv.push_back(arg);
 			for (int i = state->next; i < state->argc; i++) {
@@ -172,13 +199,15 @@ RunProgramConfig run_program_config;
 
 void parse_args(int argc, char **argv) {
 	run_program_config.time_limit = 1000;
+	run_program_config.real_time_limit = -1;
 	run_program_config.memory_limit = 262144;
 	run_program_config.output_limit = 32768;
 	run_program_config.stack_limit = 8192;
 	run_program_config.input_file_name = "stdin";
 	run_program_config.output_file_name = "stdout";
-	run_program_config.error_file_name = "/dev/null";
+	run_program_config.error_file_name = "/dev/null";	// dump away error logs by default
 	run_program_config.work_path = "";
+	run_program_config.result_file_name = "stdout";
 	run_program_config.type = "default";
 	run_program_config.safe_mode = true;
 	run_program_config.need_show_trace_details = false;
@@ -187,37 +216,63 @@ void parse_args(int argc, char **argv) {
 
 	argp_parse(&run_program_argp, argc, argv, ARGP_NO_ARGS | ARGP_IN_ORDER, 0, &run_program_config);
 
+	if (run_program_config.real_time_limit == -1)
+		run_program_config.real_time_limit = run_program_config.time_limit + 2000;
 	run_program_config.stack_limit = min(run_program_config.stack_limit, run_program_config.memory_limit);
 
-	run_program_config.program_name = realpath(run_program_config.argv[0]);
+	if (!run_program_config.work_path.empty()) {
+		if (chdir(run_program_config.work_path.c_str()) == -1) {
+			exit(put_result(run_program_config.result_file_name, RS_JGF));
+		}
+	}
+
+	if (run_program_config.type == "java7" || run_program_config.type == "java8") {
+		run_program_config.program_name = run_program_config.argv[0];
+	} else {
+		run_program_config.program_name = realpath(run_program_config.argv[0]);
+	}
 	if (run_program_config.work_path.empty()) {
 		run_program_config.work_path = dirname(run_program_config.program_name);
 		run_program_config.program_basename = basename(run_program_config.program_name);
 		run_program_config.argv[0] = "./" + run_program_config.program_basename;
+
+		if (chdir(run_program_config.work_path.c_str()) == -1) {
+			exit(put_result(run_program_config.result_file_name, RS_JGF));
+		}
 	}
 
 	if (run_program_config.type == "python2.7") {
 		string pre[4] = {"/usr/bin/python2.7", "-E", "-s", "-B"};
 		run_program_config.argv.insert(run_program_config.argv.begin(), pre, pre + 4);
-	} else if (run_program_config.type == "python3.4") {
-		string pre[3] = {"/usr/bin/python3.4", "-I", "-B"};
+	} else if (run_program_config.type == "python3") {
+		string pre[3] = {"/usr/bin/python3", "-I", "-B"};
+		run_program_config.argv.insert(run_program_config.argv.begin(), pre, pre + 3);
+	} else if (run_program_config.type == "java7") {
+		string pre[3] = {abspath(0, string(self_path) + "/../runtime/jdk1.7.0/bin/java"), "-Xmx1024m", "-Xss1024m"};
+		run_program_config.argv.insert(run_program_config.argv.begin(), pre, pre + 3);
+	} else if (run_program_config.type == "java8") {
+		string pre[3] = {abspath(0, string(self_path) + "/../runtime/jdk1.8.0/bin/java"), "-Xmx1024m", "-Xss1024m"};
 		run_program_config.argv.insert(run_program_config.argv.begin(), pre, pre + 3);
 	}
 }
 
-void set_limit(int r, int val)  {
+void set_limit(int r, int rcur, int rmax = -1)  {
+	if (rmax == -1)
+		rmax = rcur;
 	struct rlimit l;
 	if (getrlimit(r, &l) == -1) {
 		exit(55);
 	}
-	l.rlim_cur = val;
-	l.rlim_max = val;
+	l.rlim_cur = rcur;
+	l.rlim_max = rmax;
 	if (setrlimit(r, &l) == -1) {
 		exit(55);
 	}
 }
 void run_child() {
-	set_limit(RLIMIT_CPU, (int) ceil(20 * run_program_config.time_limit / 1000.0)); // This limits wall time, it will be extreamly slow on the cloud
+	set_limit(RLIMIT_CPU,
+		(int) ceil(run_program_config.time_limit / 1000.0),
+		(int) ceil(run_program_config.real_time_limit / 1000.0));
 	set_limit(RLIMIT_FSIZE, run_program_config.output_limit << 10);
 	set_limit(RLIMIT_STACK, run_program_config.stack_limit << 10);
 
@@ -308,7 +363,7 @@ int rp_children_add(pid_t pid) {
 		return -1;
 	}
 	rp_children[n_rp_children].pid = pid;
-	rp_children[n_rp_children].mode = 0;
+	rp_children[n_rp_children].mode = -1;
 	n_rp_children++;
 	return 0;
 }
@@ -339,7 +394,7 @@ RunResult trace_children() {
 		return RunResult(RS_JGF);
 	} else if (rp_timer_pid == 0) {
 		struct timespec ts;
-		ts.tv_sec = (int) ceil(20 * run_program_config.time_limit / 1000.0) + 2; // See rlimit set by set_limit
+		ts.tv_sec = (int) ceil(run_program_config.real_time_limit / 1000.0);
 		ts.tv_nsec = 0;
 		nanosleep(&ts, NULL);
 		exit(0);
@@ -349,14 +404,14 @@ RunResult trace_children() {
 		cerr << "timerpid " << rp_timer_pid << endl;
 	}
 
-	bool has_started = false;
-
 	pid_t prev_pid = -1;
 	int useras = 0;
 	while (true) {
 		int stat = 0;
+		int sig = 0;
 		struct rusage ruse;
-		pid_t pid = wait3(&stat, 0, &ruse);
+		
+		pid_t pid = wait4(-1, &stat, __WALL, &ruse);
 		if (run_program_config.need_show_trace_details) {
 			if (prev_pid != pid) {
 				cerr << "----------" << pid << "----------" << endl;
@@ -370,44 +425,57 @@ RunResult trace_children() {
 			}
 			continue;
 		}
+		
+		int p = rp_children_pos(pid);
+		if (p == -1) {
+			if (run_program_config.need_show_trace_details) {
+				fprintf(stderr, "new_proc  %lld\n", (long long int)pid);
+			}
+			if (rp_children_add(pid) == -1) {
+				stop_child(pid);
+				stop_all();
+				return RunResult(RS_DGS);
+			}
+			p = n_rp_children - 1;
+		}
 
-		// int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
-		//              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000; // This is wall tile
-		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000; // This is user time
-		int usermem, userrss = ruse.ru_maxrss;
-
-		if (pid == rp_children[0].pid) {
-			if (!run_program_config.userss)
+		int usertim = ruse.ru_utime.tv_sec * 1000 + ruse.ru_utime.tv_usec / 1000 +
+		              ruse.ru_stime.tv_sec * 1000 + ruse.ru_stime.tv_usec / 1000;
+		int userrss = ruse.ru_maxrss;
+		if (!run_program_config.userss)
+		{
+			char statm_path[255];
+			sprintf(statm_path, "/proc/%d/statm", pid);
+			FILE *statm = fopen(statm_path, "r");
+			if (statm)
 			{
-				char statm_path[255];
-				sprintf(statm_path, "/proc/%d/statm", pid);
-				FILE *statm = fopen(statm_path, "r");
-				if (statm)
+				int size, resident, shared, trs, lrs, drs, dt;
+				if (fscanf(statm, "%d%d%d%d%d%d%d", &size, &resident, &shared, &trs, &lrs, &drs, &dt) != 7)
 				{
-					int size, resident, shared, trs, lrs, drs, dt;;
-					if (fscanf(statm, "%d%d%d%d%d%d%d", &size, &resident, &shared, &trs, &lrs, &drs, &dt) != 7)
-					{
-						cerr << "reading statm failed" << endl;
-						stop_all();
-						return RunResult(RS_JGF);
-					}
-					fclose(statm);
-					useras = max(useras, drs*4);
+					cerr << "reading statm failed" << endl;
+					stop_all();
+					return RunResult(RS_JGF);
 				}
+				fclose(statm);
+				useras = max(useras, drs * 4);
 			}
-			usermem = run_program_config.userss? userrss: useras;
-			if (usermem > run_program_config.memory_limit) {
-				stop_all();
-				return RunResult(RS_MLE);
-			}
-			if (usertim > run_program_config.time_limit) { // this will only triggered when there is a syscall
-				stop_all();
-				return RunResult(RS_TLE);
-			}
+		}
+		int usermem = run_program_config.userss ? userrss : useras;
+		if (usertim > run_program_config.time_limit) {
+			stop_all();
+			return RunResult(RS_TLE);
+		}
+		if (usermem > run_program_config.memory_limit) {
+			stop_all();
+			return RunResult(RS_MLE);
 		}
 
 		if (WIFEXITED(stat)) {
-			if (!has_started) {
+			if (run_program_config.need_show_trace_details) {
+				fprintf(stderr, "exit     : %d\n", WEXITSTATUS(stat));
+			}
+			if (rp_children[0].mode == -1) {
+				stop_all();
 				return RunResult(RS_JGF, -1, -1, WEXITSTATUS(stat));
 			} else {
 				if (pid == rp_children[0].pid) {
@@ -421,15 +489,19 @@ RunResult trace_children() {
 		}
 
 		if (WIFSIGNALED(stat)) {
+			if (run_program_config.need_show_trace_details) {
+				fprintf(stderr, "sig exit : %d\n", WTERMSIG(stat));
+			}
 			if (pid == rp_children[0].pid) {
-				int sig = WTERMSIG(stat);
-				switch(sig) {
-				case SIGKILL:
+				switch(WTERMSIG(stat)) {
 				case SIGXCPU: // nearly impossible
+					stop_all();
 					return RunResult(RS_TLE);
 				case SIGXFSZ:
+					stop_all();
 					return RunResult(RS_OLE);
 				default:
+					stop_all();
 					return RunResult(RS_RE);
 				}
 			} else {
@@ -439,89 +511,77 @@ RunResult trace_children() {
 		}
 		
 		if (WIFSTOPPED(stat)) {
-			int sig = WSTOPSIG(stat);
-			if (sig != SIGTRAP) {
-				if (pid == rp_children[0].pid) {
-					switch(sig) {
-					case SIGALRM:
-					case SIGCHLD:
-					case SIGSTOP:
-						break;
-					case SIGKILL:
-					case SIGXCPU: // nearly impossible
-						stop_all();
-						return RunResult(RS_TLE);
-					case SIGXFSZ:
-						stop_all();
-						return RunResult(RS_OLE);
-					default:
-						if (run_program_config.need_show_trace_details) {
-							fprintf(stderr, "sig  : %d\n", sig);
+			sig = WSTOPSIG(stat);
+			
+			if (rp_children[p].mode == -1) {
+				if ((p == 0 && sig == SIGTRAP) || (p != 0 && sig == SIGSTOP)) {
+					if (p == 0) {
+						int ptrace_opt = PTRACE_O_EXITKILL | PTRACE_O_TRACESYSGOOD;
+						if (run_program_config.safe_mode) {
+							ptrace_opt |= PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK;
+							ptrace_opt |= PTRACE_O_TRACEEXEC;
 						}
-						stop_all();
-						return RunResult(RS_RE);
-					}
-				}
-			} else {
-				if (!has_started) {
-					if (run_program_config.safe_mode) {
-						int ptrace_opt = PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK | PTRACE_O_TRACEEXEC;
 						if (ptrace(PTRACE_SETOPTIONS, pid, NULL, ptrace_opt) == -1) {
 							stop_all();
 							return RunResult(RS_JGF);
 						}
 					}
-					has_started = true;
-				} else {
+					sig = 0;
+				}
+				rp_children[p].mode = 0;
+			} else if (sig == (SIGTRAP | 0x80)) {
+				if (rp_children[p].mode == 0) {
 					if (run_program_config.safe_mode) {
-						int p = rp_children_pos(pid);
-						if (p == -1) {
+						if (!check_safe_syscall(pid, run_program_config.need_show_trace_details)) {
 							stop_all();
-							return RunResult(RS_JGF);
-						}
-						if (rp_children[p].mode == 0) {
-							if (!check_safe_syscall(pid, run_program_config.need_show_trace_details)) {
-								stop_all();
-								return RunResult(RS_DGS);
-							}
-							rp_children[p].mode = 1;
-						} else {
-							pid_t child_pid, child_tracer_pid;
-							struct user_regs_struct reg;
-							switch ((stat >> 16) & 0xffff) {
-								case PTRACE_EVENT_CLONE:
-								case PTRACE_EVENT_FORK:
-								case PTRACE_EVENT_VFORK:
-									if (ptrace(PTRACE_GETEVENTMSG, pid, 0, &child_pid) == -1) {
-										stop_all();
-										return RunResult(RS_JGF);
-									}
-									if (rp_children_add(child_pid) == -1) {
-										stop_child(child_pid);
-										stop_all();
-										return RunResult(RS_JGF);
-									}
-									if (run_program_config.need_show_trace_details) {
-										fprintf(stderr, "new_proc  %lld\n", (long long int)child_pid);
-									}
-									break;
-								case PTRACE_EVENT_EXEC:
-									rp_children[p].mode = 1;
-									break;
-								default:
-									rp_children[p].mode = 0;
-									ptrace(PTRACE_GETREGS, pid, NULL, &reg);
-									if (run_program_config.need_show_trace_details) {
-										fprintf(stderr, "exitsys  %lld (ret %lld)\n", (long long int)reg.REG_SYSCALL, (long long int)reg.REG_RET);
-									}
-									break;
-							}
+							return RunResult(RS_DGS);
 						}
 					}
+					rp_children[p].mode = 1;
+				} else {
+					if (run_program_config.safe_mode) {
+						on_syscall_exit(pid, run_program_config.need_show_trace_details);
+					}
+					rp_children[p].mode = 0;
+				}
+				
+				sig = 0;
+			} else if (sig == SIGTRAP) {
+				switch ((stat >> 16) & 0xffff) {
+					case PTRACE_EVENT_CLONE:
+					case PTRACE_EVENT_FORK:
+					case PTRACE_EVENT_VFORK:
+						sig = 0;
+						break;
+					case PTRACE_EVENT_EXEC:
+						rp_children[p].mode = 1;
+						sig = 0;
+						break;
+					case 0:
+						break;
+					default:
+						stop_all();
+						return RunResult(RS_JGF);
 				}
 			}
+
+			if (sig != 0) {
+				if (run_program_config.need_show_trace_details) {
+					fprintf(stderr, "sig      : %d\n", sig);
+				}
+			}
+			
+			switch(sig) {
+			case SIGXCPU:
+				stop_all();
+				return RunResult(RS_TLE);
+			case SIGXFSZ:
+				stop_all();
+				return RunResult(RS_OLE);
+			}
 		}
-		ptrace(PTRACE_SYSCALL, pid, NULL, NULL);
+		
+		ptrace(PTRACE_SYSCALL, pid, NULL, sig);
 	}
 }
 
@@ -530,25 +590,20 @@ RunResult run_parent(pid_t pid) {
 	
 	n_rp_children = 0;
 
-	rp_children[n_rp_children].pid = pid;
-	rp_children[n_rp_children].mode = 0;
-	n_rp_children++;
+	rp_children_add(pid);
 	return trace_children();
 }
 int main(int argc, char **argv) {
+	self_path[readlink("/proc/self/exe", self_path, PATH_MAX)] = '\0';
 	parse_args(argc, argv);
-
-	if (chdir(run_program_config.work_path.c_str()) == -1) {
-		return put_result(RS_JGF);
-	}
 
 	pid_t pid = fork();
 	if (pid == -1) {
-		return put_result(RS_JGF);
+		return put_result(run_program_config.result_file_name, RS_JGF);
 	} else if (pid == 0) {
 		run_child();
 	} else {
-		return put_result(run_parent(pid));
+		return put_result(run_program_config.result_file_name, run_parent(pid));
 	}
-	return put_result(RS_JGF);
+	return put_result(run_program_config.result_file_name, RS_JGF);
 }
