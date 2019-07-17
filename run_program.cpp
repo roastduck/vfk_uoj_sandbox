@@ -213,6 +213,7 @@ void parse_args(int argc, char **argv) {
 	run_program_config.safe_mode = true;
 	run_program_config.need_show_trace_details = false;
 	run_program_config.allow_proc = false;
+	run_program_config.userss = false;
 
 	argp_parse(&run_program_argp, argc, argv, ARGP_NO_ARGS | ARGP_IN_ORDER, 0, &run_program_config);
 
